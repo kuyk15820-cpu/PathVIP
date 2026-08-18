@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   build:
-    runs-on: macos-14 # [จุดแก้ 1] เปลี่ยนจาก macos-26 เป็น macos-14 (รองรับ Xcode 15+)
+    runs-on: macos-26 # [จุดแก้ 1] เปลี่ยนจาก macos-26 เป็น macos-14 (รองรับ Xcode 15+)
 
     steps:
       - name: checkout
