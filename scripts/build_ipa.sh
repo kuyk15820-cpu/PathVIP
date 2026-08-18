@@ -8,16 +8,23 @@ mkdir -p build
 echo "Build Started!"
 echo
 
-# 2. ค้นหาชื่อไฟล์ .xcodeproj ในโฟลเดอร์อัตโนมัติ (ไม่ต้องแก้ไขชื่อโปรเจกต์เอง)
+# 2. ค้นหาชื่อไฟล์ .xcodeproj ในโฟลเดอร์อัตโนมัติ
 PROJECT_FILE=$(ls -d *.xcodeproj | head -n 1)
 PROJECT_NAME=$(basename "$PROJECT_FILE" .xcodeproj)
 
 echo "Found Project: $PROJECT_NAME"
 
-# 3. สั่ง Archive โปรเจกต์ โดยปิด Code Signing
+# 3. [เพิ่มส่วนนี้] ดึงชื่อ Target แรกในโปรเจกต์ มาสร้าง Shared Scheme ชั่วคราวอัตโนมัติ
+TARGET_NAME=$(xcodebuild -list -project "$PROJECT_FILE" | grep -A 10 "Targets:" | tail -n +2 | xargs | cut -d ' ' -f 1)
+SCHEME_NAME="$TARGET_NAME"
+
+echo "Auto-generating scheme for Target: $SCHEME_NAME..."
+xcodebuild -project "$PROJECT_FILE" -scheme "$SCHEME_NAME" -manageAutomaticSchemes >/dev/null 2>&1 || true
+
+# 4. สั่ง Archive โปรเจกต์ โดยใช้ Scheme ที่ตรวจพบ
 xcodebuild \
   -project "$PROJECT_FILE" \
-  -scheme "$PROJECT_NAME" \
+  -scheme "$SCHEME_NAME" \
   -configuration Release \
   -sdk iphoneos \
   CODE_SIGNING_ALLOWED=NO \
@@ -33,12 +40,12 @@ if [ ! -d "$APP_PATH" ]; then
   exit 1
 fi
 
-# 4. จัดโครงสร้างโฟลเดอร์ Payload
+# 5. จัดโครงสร้างโฟลเดอร์ Payload
 rm -rf "$PWD/build/Payload"
 mkdir -p "$PWD/build/Payload"
 cp -R "$APP_PATH" "$PWD/build/Payload/"
 
-# 5. ใช้ ldid ทำ Pseudo-sign (แบบไม่ต้องใช้ไฟล์ .entitlements)
+# 6. ใช้ ldid ทำ Pseudo-sign
 if command -v ldid >/dev/null 2>&1; then
   echo "Signing with ldid..."
   ldid -S "$PWD/build/Payload/$PROJECT_NAME.app/$PROJECT_NAME"
@@ -46,7 +53,7 @@ else
   echo "Warning: ldid not installed, skipping pseudo-signing."
 fi
 
-# 6. บีบอัดเป็นไฟล์ .ipa
+# 7. บีบอัดเป็นไฟล์ .ipa
 (cd "$PWD/build" && /usr/bin/zip -qry "$PROJECT_NAME.ipa" Payload)
 
 echo
