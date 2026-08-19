@@ -49,11 +49,11 @@ jobs:
             Dir.glob('**/*.swift').each do |swift_file|
               next if swift_file.start_with?('Pods/', 'Build/', '.build/', 'DerivedData/')
               
-              file_ref = project.main_group.find_subpath(swift_file, true)
-              file_ref.set_source_tree('<group>')
+              # ใช้ new_file เพื่อรับประกันว่า file_ref.path ไม่เป็น nil
+              file_ref = project.main_group.new_file(swift_file)
               
               unless target.source_build_phase.files_references.include?(file_ref)
-                target.add_file_references([file_ref])
+                target.source_build_phase.add_file_reference(file_ref)
                 puts \"Added to project: #{swift_file}\"
               end
             end
