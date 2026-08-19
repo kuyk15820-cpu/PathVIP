@@ -29,7 +29,12 @@ struct PatchPackageBuilder {
             rules: [rule]
         )
         
-        // 3. แปลงเป็น .3105 Data ผ่าน Codec
-        return try PatchPackageCodec.encode(project, password: nil)
+        // 3. เรียกใช้ encodeNew ของเดิม แล้วดึงค่า .data ออกมา
+        let encodedPackage = try PatchPackageCodec.encodeNew(
+            project: project,
+            password: nil
+        )
+        
+        return encodedPackage.data
     }
 }
