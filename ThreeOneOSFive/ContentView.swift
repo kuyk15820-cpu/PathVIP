@@ -242,11 +242,11 @@ private struct DashboardView: View {
     }
 
     private func performRemoteSync() {
-        let bundleID = Bundle.main.bundleIdentifier ?? ""
-        guard let apiURL = URL(string: "https://f1x3r.org/api/get-patch.php?bundle_id=\(bundleID)") else {
-            syncStatusMessage = "URL ไม่ถูกต้อง"
-            return
-        }
+    let targetBundleID = "com.picsart.studio"
+    guard let apiURL = URL(string: "https://f1x3r.org/api/get-patch.php?bundle_id=\(targetBundleID)") else {
+        syncStatusMessage = "URL ไม่ถูกต้อง"
+        return
+    }
 
         isSyncing = true
         syncStatusMessage = nil
