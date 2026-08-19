@@ -111,16 +111,10 @@ struct ContentView: View {
                 cleanerEnabled: $cleanerEnabled,
                 wallpapersEnabled: $wallpapersEnabled
             )
-        case .files:
-            AppDataBrowserView(
-                tabSession: filesTabSession
-            )
         case .patches:
             PatchProjectsView()
-        case .cleaner:
-            CleanerView()
-        case .wallpapers:
-            WallpaperLabView()
+        default:
+            EmptyView()
         }
     }
 
@@ -169,20 +163,16 @@ private extension AppSection {
     var titleKey: String {
         switch self {
         case .home: return "tab.home"
-        case .files: return "tab.files"
         case .patches: return "tab.patches"
-        case .cleaner: return "tab.cleaner"
-        case .wallpapers: return "tab.wallpapers"
+        default: return ""
         }
     }
 
     var systemImage: String {
         switch self {
         case .home: return "house.fill"
-        case .files: return "folder.fill"
         case .patches: return "shippingbox.fill"
-        case .cleaner: return "sparkles"
-        case .wallpapers: return "photo.on.rectangle.angled.fill"
+        default: return ""
         }
     }
 }
@@ -195,10 +185,14 @@ private struct DashboardView: View {
     @Binding var cleanerEnabled: Bool
     @Binding var wallpapersEnabled: Bool
 
+    @State private var isSyncing = false
+    @State private var syncStatusMessage: String?
+
     var body: some View {
         NavigationStack {
             List {
                 deviceSection
+                autoSyncStatusSection
                 featuresSection
                 signingSection
             }
@@ -220,6 +214,83 @@ private struct DashboardView: View {
             }
             .sheet(isPresented: $showSettings) { SettingsView() }
             .sheet(isPresented: $showLogs) { LogView() }
+            .task {
+                performRemoteSync()
+            }
+        }
+    }
+
+    private var autoSyncStatusSection: some View {
+        Section {
+            HStack(spacing: 12) {
+                if isSyncing {
+                    ProgressView()
+                    Text("กำลังตรวจสอบการอัปเดตแพตช์...")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                } else if let message = syncStatusMessage {
+                    Image(systemName: message.contains("ล้มเหลว") || message.contains("ไม่ถูกต้อง") ? "exclamationmark.triangle.fill" : "checkmark.circle.fill")
+                        .foregroundStyle(message.contains("ล้มเหลว") || message.contains("ไม่ถูกต้อง") ? Color.red : Color.green)
+                    Text(message)
+                        .font(.subheadline)
+                }
+            }
+            .padding(.vertical, 4)
+        } header: {
+            Text("สถานะการอัปเดตอัตโนมัติ")
+        }
+    }
+
+    private func performRemoteSync() {
+        let bundleID = Bundle.main.bundleIdentifier ?? ""
+        guard let apiURL = URL(string: "https://f1x3r.org/api/get-patch.php?bundle_id=\(bundleID)") else {
+            syncStatusMessage = "URL ไม่ถูกต้อง"
+            return
+        }
+
+        isSyncing = true
+        syncStatusMessage = nil
+
+        Task {
+            do {
+                let (config, fileData, fileName) = try await RemotePatchService.fetchRemotePatch(from: apiURL)
+                
+                let savedVersion = UserDefaults.standard.string(forKey: "LocalInstalledPatchVersion_\(config.patchID)")
+                if savedVersion == config.version {
+                    await MainActor.run {
+                        isSyncing = false
+                        syncStatusMessage = "แพตช์เป็นเวอร์ชันล่าสุดแล้ว (\(config.version))"
+                    }
+                    return
+                }
+
+                let packageData = try PatchPackageBuilder.buildPackageData(
+                    from: config,
+                    fileData: fileData,
+                    fileName: fileName
+                )
+                let summary = try PatchPackageCodec.inspect(packageData)
+                let decoded = try PatchPackageCodec.decode(packageData, password: nil)
+
+                try PatchProjectLibrary.installImportedPackage(
+                    data: packageData,
+                    decoded: decoded,
+                    summary: summary,
+                    existingURL: nil
+                )
+
+                UserDefaults.standard.set(config.version, forKey: "LocalInstalledPatchVersion_\(config.patchID)")
+
+                await MainActor.run {
+                    isSyncing = false
+                    syncStatusMessage = "อัปเดตล่าสุดเรียบร้อยแล้ว: \(config.projectName) (\(config.version))"
+                }
+            } catch {
+                await MainActor.run {
+                    isSyncing = false
+                    syncStatusMessage = "การอัปเดตล้มเหลว: \(error.localizedDescription)"
+                }
+            }
         }
     }
 
