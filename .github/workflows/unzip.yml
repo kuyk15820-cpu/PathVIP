@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   build:
-    runs-on: macos-26 
+    runs-on: macos-26
 
     steps:
       - name: checkout
@@ -30,6 +30,36 @@ jobs:
 
       - name: install ldid
         run: brew install ldid
+
+      - name: sync swift files to xcodeproj
+        run: |
+          gem install xcodeproj
+          ruby -e "
+            require 'xcodeproj'
+            
+            project_path = Dir.glob('*.xcodeproj').first
+            unless project_path
+              puts 'No .xcodeproj found'
+              exit 1
+            end
+
+            project = Xcodeproj::Project.open(project_path)
+            target = project.targets.first
+
+            Dir.glob('**/*.swift').each do |swift_file|
+              next if swift_file.start_with?('Pods/', 'Build/', '.build/', 'DerivedData/')
+              
+              file_ref = project.main_group.find_subpath(swift_file, true)
+              file_ref.set_source_tree('<group>')
+              
+              unless target.source_build_phase.files_references.include?(file_ref)
+                target.add_file_references([file_ref])
+                puts \"Added to project: #{swift_file}\"
+              end
+            end
+
+            project.save
+          "
 
       - name: build
         run: |
